@@ -150,6 +150,8 @@ pub(crate) struct Shape {
     // Indentation + any already emitted text on the first line of the current
     // statement.
     pub(crate) offset: usize,
+
+    pub(crate) allow_type_wrap: bool,
 }
 
 impl Shape {
@@ -173,6 +175,7 @@ impl Shape {
             width,
             indent,
             offset: indent.alignment,
+            allow_type_wrap: false,
         }
     }
 
@@ -181,6 +184,7 @@ impl Shape {
             width: config.max_width().saturating_sub(indent.width()),
             indent,
             offset: indent.alignment,
+            allow_type_wrap: false,
         }
     }
 
@@ -197,6 +201,7 @@ impl Shape {
             width: self.width,
             indent: Indent::new(self.indent.block_indent, alignment),
             offset: alignment,
+            allow_type_wrap: self.allow_type_wrap,
         }
     }
 
@@ -206,12 +211,14 @@ impl Shape {
                 width: self.width,
                 indent: Indent::new(self.indent.block_indent + delta, 0),
                 offset: 0,
+                allow_type_wrap: self.allow_type_wrap,
             }
         } else {
             Shape {
                 width: self.width,
                 indent: self.indent + delta,
                 offset: self.indent.alignment + delta,
+                allow_type_wrap: self.allow_type_wrap,
             }
         }
     }
@@ -274,6 +281,7 @@ impl Shape {
             width,
             indent: self.indent + delta,
             offset: self.offset + delta,
+            allow_type_wrap: self.allow_type_wrap,
         })
     }
 

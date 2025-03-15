@@ -145,7 +145,7 @@ fn get_visual_style_child_shape(
 pub(crate) fn rewrite_chain(
     expr: &ast::Expr,
     context: &RewriteContext<'_>,
-    shape: Shape,
+    mut shape: Shape,
 ) -> RewriteResult {
     let chain = Chain::from_ast(expr, context);
     debug!("rewrite_chain {:?} {:?}", chain, shape);
@@ -354,17 +354,31 @@ impl ChainItem {
         if !types.is_empty() {
             callee_str.push_str("::");
 
-            // An extra offset for the opening '('.
-            let extra_offset = extra_offset(&callee_str, shape) + 1;
-            let new_shape = shape.shrink_left(extra_offset, span)?;
+            if shape.allow_type_wrap {
+                // An extra offset for the opening '('.
+                let extra_offset = extra_offset(&callee_str, shape) + 1;
+                let new_shape = shape.shrink_left(extra_offset, span)?;
 
-            // This will break up the generics if needed.
-            let generics =
-                overflow::rewrite_with_angle_brackets(context, "", types.iter(), new_shape, span);
+                // This will break up the generics if needed.
+                let generics = overflow::rewrite_with_angle_brackets(
+                    context,
+                    "",
+                    types.iter(),
+                    new_shape,
+                    span,
+                )?;
 
-            debug!("generics: {:?}", generics);
+                callee_str.push_str(&generics);
+            } else {
+                let type_list = types
+                    .iter()
+                    .map(|ty| ty.rewrite_result(context, shape))
+                    .collect::<Result<Vec<_>, RewriteError>>()?;
 
-            callee_str.push_str(&generics?);
+                callee_str.push('<');
+                callee_str.push_str(&type_list.join(", "));
+                callee_str.push('>');
+            }
         }
 
         rewrite_call(context, &callee_str, args, span, shape)
@@ -562,6 +576,8 @@ impl Rewrite for Chain {
             }
         };
 
+        let mut shape = shape;
+        shape.allow_type_wrap = true;
         formatter.format_root(&self.parent, context, shape)?;
         if let Some(result) = formatter.pure_root() {
             return wrap_str(result, context.config.max_width(), shape)
@@ -757,7 +773,8 @@ impl<'a> ChainFormatterShared<'a> {
                     .sub_width_opt(almost_total)
             };
 
-            if let Some(one_line_shape) = one_line_shape {
+            if let Some(mut one_line_shape) = one_line_shape {
+                one_line_shape.allow_type_wrap = !all_in_one_line;
                 if let Ok(rw) = last.rewrite_result(context, one_line_shape) {
                     // We allow overflowing here only if both of the following conditions match:
                     // 1. The entire chain fits in a single line except the last child.
@@ -772,10 +789,14 @@ impl<'a> ChainFormatterShared<'a> {
                         // layout, just by looking at the overflowed rewrite. Now we rewrite the
                         // last child on its own line, and compare two rewrites to choose which is
                         // better.
-                        let last_shape = child_shape.sub_width(
+                        let mut last_shape = child_shape.sub_width(
                             shape.rhs_overhead(context.config) + last.tries,
                             last.span,
                         )?;
+
+                        // Allow generics to wrap now.
+                        last_shape.allow_type_wrap = true;
+
                         match last.rewrite_result(context, last_shape) {
                             Ok(ref new_rw) if !could_fit_single_line => {
                                 last_subexpr_str = Some(new_rw.clone());

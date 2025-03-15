@@ -2473,6 +2473,7 @@ fn rewrite_fn_base(
         width: one_line_budget,
         indent,
         offset: used_width,
+        allow_type_wrap: false,
     };
     let fd = fn_sig.decl;
     let generics_str = rewrite_generics(

@@ -876,6 +876,7 @@ impl<'a> CommentRewrite<'a> {
                     width: self.max_width.saturating_sub(offset),
                     indent: self.fmt_indent,
                     offset: self.fmt.shape.offset + offset,
+                    allow_type_wrap: false,
                 }
             } else {
                 Shape::legacy(self.max_width, self.fmt_indent)
