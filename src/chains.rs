@@ -196,6 +196,8 @@ enum ChainItemKind {
     StructField(symbol::Ident),
     TupleField(symbol::Ident, bool),
     Await,
+    Use,
+    Yield,
     Comment(String, CommentPosition),
 }
 
@@ -207,6 +209,8 @@ impl ChainItemKind {
             | ChainItemKind::StructField(..)
             | ChainItemKind::TupleField(..)
             | ChainItemKind::Await
+            | ChainItemKind::Use
+            | ChainItemKind::Yield
             | ChainItemKind::Comment(..) => false,
         }
     }
@@ -261,6 +265,14 @@ impl ChainItemKind {
                 let span = mk_sp(nested.span.hi(), expr.span.hi());
                 (ChainItemKind::Await, span)
             }
+            ast::ExprKind::Use(ref nested, _) => {
+                let span = mk_sp(nested.span.hi(), expr.span.hi());
+                (ChainItemKind::Use, span)
+            }
+            ast::ExprKind::Yield(ast::YieldKind::Postfix(ref nested)) => {
+                let span = mk_sp(nested.span.hi(), expr.span.hi());
+                (ChainItemKind::Yield, span)
+            }
             _ => {
                 return (
                     ChainItemKind::Parent {
@@ -308,6 +320,8 @@ impl Rewrite for ChainItem {
                 rewrite_ident(context, ident)
             ),
             ChainItemKind::Await => ".await".to_owned(),
+            ChainItemKind::Use => ".use".to_owned(),
+            ChainItemKind::Yield => ".yield".to_owned(),
             ChainItemKind::Comment(ref comment, _) => {
                 rewrite_comment(comment, false, shape, context.config)?
             }
@@ -537,7 +551,9 @@ impl Chain {
             }),
             ast::ExprKind::Field(ref subexpr, _)
             | ast::ExprKind::Try(ref subexpr)
-            | ast::ExprKind::Await(ref subexpr, _) => Some(SubExpr {
+            | ast::ExprKind::Await(ref subexpr, _)
+            | ast::ExprKind::Use(ref subexpr, _)
+            | ast::ExprKind::Yield(ast::YieldKind::Postfix(ref subexpr)) => Some(SubExpr {
                 expr: Self::convert_try(subexpr, context),
                 is_method_call_receiver: false,
             }),
